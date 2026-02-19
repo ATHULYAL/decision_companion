@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+"""
+Decision Companion System - Priority-Based (User-Friendly Version)
+Users just rank criteria by priority, weights auto-assigned
+"""
+
+import math
+
+
+def get_float(prompt):
+    """Get float input with error handling"""
+    while True:
+        try:
+            return float(input(prompt))
+        except ValueError:
+            print("Please enter a valid number")
+
+
+def get_int(prompt):
+    """Get integer input with error handling"""
+    while True:
+        try:
+            return int(input(prompt))
+        except ValueError:
+            print("Please enter a valid integer")
+
+
+def calculate_priority_weights(num_criteria):
+    """
+    Calculate weights based on priority order using halving logic
+    
+    Priority 1: Gets 50% of remaining
+    Priority 2: Gets 50% of what's left (25% of total)
+    Priority 3: Gets 50% of what's left (12.5% of total)
+    etc.
+    
+    Then normalize so they sum to 1.0
+    """
+    raw_weights = []
+    
+    for i in range(num_criteria):
+        # Each priority gets half of previous
+        raw_weight = 0.5 ** (i + 1)
+        raw_weights.append(raw_weight)
+    
+    # Normalize to sum to 1.0
+    total = sum(raw_weights)
+    normalized_weights = [w / total for w in raw_weights]
+    
+    return normalized_weights
+
+
+def normalize_matrix(options, criteria):
+    """Normalize values using vector normalization"""
+    normalized = {}
+    
+    for criterion_name in criteria.keys():
+        sum_of_squares = sum(opt['values'][criterion_name] ** 2 for opt in options)
+        denominator = math.sqrt(sum_of_squares)
+        
+        for option in options:
+            if option['name'] not in normalized:
+                normalized[option['name']] = {}
+            
+            normalized[option['name']][criterion_name] = (
+                option['values'][criterion_name] / denominator if denominator != 0 else 0
+            )
+    
+    return normalized
+
+
+def apply_weights(normalized, criteria):
+    """Apply weights to normalized values"""
+    weighted = {}
+    
+    for option_name, criterion_values in normalized.items():
+        weighted[option_name] = {}
+        for criterion_name, criterion_data in criteria.items():
+            weighted[option_name][criterion_name] = (
+                criterion_values[criterion_name] * criterion_data['weight']
+            )
+    
+    return weighted
+
+
+def find_ideal_solutions(weighted, criteria, options):
+    """Find ideal best and worst solutions"""
+    ideal_best = {}
+    ideal_worst = {}
+    
+    for criterion_name, criterion_data in criteria.items():
+        values = [weighted[opt['name']][criterion_name] for opt in options]
+        
+        if criterion_data['type'] == 'benefit':
+            ideal_best[criterion_name] = max(values)
+            ideal_worst[criterion_name] = min(values)
+        else:  # cost
+            ideal_best[criterion_name] = min(values)
+            ideal_worst[criterion_name] = max(values)
+    
+    return ideal_best, ideal_worst
+
+
+def calculate_distances(weighted, ideal_best, ideal_worst, options, criteria):
+    """Calculate Euclidean distance from ideal solutions"""
+    distances = {}
+    
+    for option in options:
+        option_name = option['name']
+        
+        dist_best = math.sqrt(sum(
+            (weighted[option_name][crit_name] - ideal_best[crit_name]) ** 2
+            for crit_name in criteria.keys()
+        ))
+        
+        dist_worst = math.sqrt(sum(
+            (weighted[option_name][crit_name] - ideal_worst[crit_name]) ** 2
+            for crit_name in criteria.keys()
+        ))
+        
+        distances[option_name] = (dist_best, dist_worst)
+    
+    return distances
+
+
+def calculate_scores(distances):
+    """Calculate relative closeness scores"""
+    scores = {}
+    
+    for option_name, (dist_best, dist_worst) in distances.items():
+        denominator = dist_best + dist_worst
+        scores[option_name] = dist_worst / denominator if denominator != 0 else 0
+    
+    return scores
+
+
+def analyze_decision(options, criteria):
+    """Run complete TOPSIS analysis"""
+    normalized = normalize_matrix(options, criteria)
+    weighted = apply_weights(normalized, criteria)
+    ideal_best, ideal_worst = find_ideal_solutions(weighted, criteria, options)
+    distances = calculate_distances(weighted, ideal_best, ideal_worst, options, criteria)
+    scores = calculate_scores(distances)
+    
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    
+    return ranked, scores
+
+
+def print_results(ranked, scores, options, criteria):
+    """Print analysis results"""
+    print("\n" + "="*70)
+    print("DECISION ANALYSIS RESULTS")
+    print("="*70)
+    
+    best_name = ranked[0][0]
+    best_score = ranked[0][1]
+    
+    print(f"\n🏆 RECOMMENDED OPTION: {best_name}")
+    print(f"   Score: {best_score:.4f} ({best_score*100:.2f}%)")
+    
+    best_option = next(opt for opt in options if opt['name'] == best_name)
+    
+    print(f"\n{'─'*70}")
+    print("WHY THIS OPTION:")
+    print(f"{'─'*70}")
+    
+    # Show criteria in priority order (as entered by user)
+    criterion_list = list(criteria.items())
+    
+    for i, (crit_name, crit_data) in enumerate(criterion_list, 1):
+        value = best_option['values'][crit_name]
+        weight_pct = crit_data['weight'] * 100
+        type_str = "↑ Higher is better" if crit_data['type'] == 'benefit' else "↓ Lower is better"
+        
+        all_values = [opt['values'][crit_name] for opt in options]
+        if crit_data['type'] == 'benefit':
+            sorted_values = sorted(all_values, reverse=True)
+        else:
+            sorted_values = sorted(all_values)
+        rank = sorted_values.index(value) + 1
+        
+        print(f"\n• Priority #{i}: {crit_name} (Auto-weight: {weight_pct:.1f}%, {type_str})")
+        print(f"  Value: {value:.2f} | Rank: #{rank} of {len(options)}")
+    
+    print(f"\n{'─'*70}")
+    print("COMPLETE RANKING:")
+    print(f"{'─'*70}\n")
+    
+    for i, (name, score) in enumerate(ranked, 1):
+        print(f"{i}. {name:<30} Score: {score:.4f} ({score*100:.2f}%)")
+    
+    print("\n" + "="*70 + "\n")
+
+
+def main():
+    """Main execution"""
+    print("\n" + "="*70)
+    print("DECISION COMPANION SYSTEM")
+    print("="*70)
+    print("\n✨ Simple Priority-Based Decision Making")
+    print("   Just rank what matters most to you - we handle the rest!")
+    
+    decision = input("\n📋 What decision are you making?\n> ").strip()
+    
+    # Get options
+    print(f"\n{'='*70}")
+    print("STEP 1: DEFINE OPTIONS")
+    print("="*70)
+    num_options = get_int("\nHow many options to compare? ")
+    
+    options = []
+    for i in range(num_options):
+        name = input(f"Option {i+1} name: ").strip()
+        options.append({'name': name, 'values': {}})
+    
+    # Get criteria IN PRIORITY ORDER
+    print(f"\n{'='*70}")
+    print("STEP 2: DEFINE CRITERIA (In Priority Order)")
+    print("="*70)
+    print("\n⭐ IMPORTANT: Enter criteria from MOST to LEAST important")
+    print("   Example: 1st = Performance, 2nd = Price, 3rd = Battery")
+    print("\n💡 Weights will be assigned automatically:")
+    print("   Priority 1 gets 50% importance")
+    print("   Priority 2 gets 25% importance")
+    print("   Priority 3 gets 12.5% importance")
+    print("   And so on...\n")
+    
+    num_criteria = get_int("How many criteria? ")
+    
+    # Calculate weights automatically
+    weights = calculate_priority_weights(num_criteria)
+    
+    criteria = {}
+    
+    print("\n" + "─"*70)
+    for i in range(num_criteria):
+        print(f"\n--- Priority #{i+1} Criterion (Auto-weight: {weights[i]*100:.1f}%) ---")
+        name = input("Name: ").strip()
+        
+        print("Type: 1 = Benefit (higher is better), 2 = Cost (lower is better)")
+        type_choice = input("Choose (1/2): ").strip()
+        crit_type = 'benefit' if type_choice == '1' else 'cost'
+        
+        criteria[name] = {
+            'weight': weights[i],
+            'type': crit_type,
+            'priority': i + 1
+        }
+    
+    # Show assigned weights
+    print(f"\n{'─'*70}")
+    print("📊 AUTO-ASSIGNED WEIGHTS:")
+    print(f"{'─'*70}")
+    total_check = 0
+    for crit_name, crit_data in criteria.items():
+        print(f"  • {crit_name:<25} {crit_data['weight']*100:>6.2f}% (Priority #{crit_data['priority']})")
+        total_check += crit_data['weight']
+    print(f"{'─'*70}")
+    print(f"  {'Total:':<25} {total_check*100:>6.2f}%")
+    
+    # Get values for each option
+    print(f"\n{'='*70}")
+    print("STEP 3: ENTER VALUES")
+    print("="*70)
+    print("\nEnter the value for each option on each criterion\n")
+    
+    for option in options:
+        print(f"--- {option['name']} ---")
+        for crit_name in criteria.keys():
+            value = get_float(f"  {crit_name}: ")
+            option['values'][crit_name] = value
+        print()
+    
+    # Analyze
+    print("="*70)
+    print("ANALYZING...")
+    print("="*70)
+    
+    ranked, scores = analyze_decision(options, criteria)
+    
+    # Display results
+    print_results(ranked, scores, options, criteria)
+    
+    print("Thank you for using Decision Companion System!\n")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n❌ Cancelled by user\n")
+    except Exception as e:
+        print(f"\n\n❌ Error: {e}\n")
