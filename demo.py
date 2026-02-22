@@ -294,6 +294,138 @@
 #         print(f"\n\n❌ Error: {e}\n")
 
 #!/usr/bin/env python3
+# import math
+
+# class DecisionEngine:
+#     def __init__(self):
+#         self.qualitative_map = {
+#             "very low": 1, "low": 3, "medium": 5, 
+#             "high": 7, "very high": 9
+#         }
+
+#     def calculate_roc_weights(self, num_criteria):
+#         """Calculates weights based on priority rank using ROC."""
+#         weights = []
+#         for i in range(1, num_criteria + 1):
+#             weight = sum(1.0 / j for j in range(i, num_criteria + 1)) / num_criteria
+#             weights.append(weight)
+#         return weights
+
+#     def _to_float(self, value):
+#         if isinstance(value, str):
+#             val = value.lower().strip()
+#             return float(self.qualitative_map.get(val, 5))
+#         try:
+#             return float(value)
+#         except (ValueError, TypeError):
+#             return 0.0
+
+#     def run_topsis(self, options, criteria):
+#         if not options or not criteria:
+#             return {"error": "Insufficient data"}
+
+#         # 1. Normalization
+#         norm_matrix = {}
+#         for crit in criteria:
+#             c_id = crit['id']
+#             sq_sum = sum(self._to_float(opt['values'].get(c_id, 0))**2 for opt in options)
+#             denominator = math.sqrt(sq_sum)
+            
+#             for opt in options:
+#                 name = opt['name']
+#                 if name not in norm_matrix: norm_matrix[name] = {}
+#                 val = self._to_float(opt['values'].get(c_id, 0))
+#                 norm_matrix[name][c_id] = (val / denominator) if denominator != 0 else 0
+
+#         # 2. Weighted Matrix
+#         weighted_matrix = {}
+#         for opt_name, scores in norm_matrix.items():
+#             weighted_matrix[opt_name] = {
+#                 c_id: scores[c_id] * next(c['weight'] for c in criteria if c['id'] == c_id)
+#                 for c_id in scores
+#             }
+
+#         # 3. Ideal Solutions
+#         ideal_best, ideal_worst = {}, {}
+#         for crit in criteria:
+#             c_id = crit['id']
+#             v_list = [weighted_matrix[opt['name']][c_id] for opt in options]
+#             if crit['type'] == 'benefit':
+#                 ideal_best[c_id], ideal_worst[c_id] = max(v_list), min(v_list)
+#             else:
+#                 ideal_best[c_id], ideal_worst[c_id] = min(v_list), max(v_list)
+
+#         # 4. Scoring
+#         results = []
+#         for opt in options:
+#             name = opt['name']
+#             d_best = math.sqrt(sum((weighted_matrix[name][c['id']] - ideal_best[c['id']])**2 for c in criteria))
+#             d_worst = math.sqrt(sum((weighted_matrix[name][c['id']] - ideal_worst[c['id']])**2 for c in criteria))
+            
+#             total_dist = d_best + d_worst
+#             performance_score = (d_worst / total_dist) if total_dist != 0 else 0.5
+            
+#             results.append({"name": name, "score": round(performance_score, 4)})
+
+#         return sorted(results, key=lambda x: x['score'], reverse=True)
+
+# def get_input(prompt, type_=str):
+#     while True:
+#         try:
+#             val = input(prompt).strip()
+#             if not val: continue
+#             return type_(val)
+#         except ValueError:
+#             print(f"Invalid input. Please enter a {type_.__name__}.")
+
+# def main():
+#     engine = DecisionEngine()
+#     print("\n--- DECISION COMPANION SYSTEM ---")
+#     goal = input("What are you deciding? (e.g., Best Laptop): ")
+
+#     # 1. Gather Criteria
+#     print("\nSTEP 1: Define Criteria (Ranked from Most Important to Least)")
+#     num_crit = get_input("How many criteria? ", int)
+#     criteria = []
+#     for i in range(num_crit):
+#         print(f"\nPriority #{i+1}:")
+#         name = get_input("  Name (e.g., Price): ")
+#         c_type = get_input("  Type (1 for Benefit/Higher is better, 2 for Cost/Lower is better): ")
+#         criteria.append({
+#             "id": f"c{i}", 
+#             "name": name, 
+#             "type": "benefit" if c_type == "1" else "cost"
+#         })
+
+#     # Auto-assign ROC weights
+#     weights = engine.calculate_roc_weights(num_crit)
+#     for i, crit in enumerate(criteria):
+#         crit['weight'] = weights[i]
+
+#     # 2. Gather Options
+#     print("\nSTEP 2: Define Options")
+#     num_opts = get_input("How many options to compare? ", int)
+#     options = []
+#     for i in range(num_opts):
+#         opt_name = get_input(f"  Name for Option {i+1}: ")
+#         opt_values = {}
+#         print(f"  Enter values for {opt_name} (use numbers or 'High', 'Medium', 'Low'):")
+#         for crit in criteria:
+#             val = get_input(f"    {crit['name']}: ")
+#             opt_values[crit['id']] = val
+#         options.append({"name": opt_name, "values": opt_values})
+
+#     # 3. Calculate and Display
+#     print("\n--- RESULTS ---")
+#     results = engine.run_topsis(options, criteria)
+    
+#     for i, res in enumerate(results, 1):
+#         status = "🏆 RECOMMENDED" if i == 1 else f"Rank {i}"
+#         print(f"{status}: {res['name']} (Match Score: {res['score']*100:.2f}%)")
+
+# if __name__ == "__main__":
+#     main()
+
 import math
 
 class DecisionEngine:
@@ -347,13 +479,17 @@ class DecisionEngine:
 
         # 3. Ideal Solutions
         ideal_best, ideal_worst = {}, {}
+        
         for crit in criteria:
             c_id = crit['id']
             v_list = [weighted_matrix[opt['name']][c_id] for opt in options]
+            
             if crit['type'] == 'benefit':
-                ideal_best[c_id], ideal_worst[c_id] = max(v_list), min(v_list)
+                ideal_best[c_id] = max(v_list)
+                ideal_worst[c_id] = min(v_list)
             else:
-                ideal_best[c_id], ideal_worst[c_id] = min(v_list), max(v_list)
+                ideal_best[c_id] = min(v_list)
+                ideal_worst[c_id] = max(v_list)
 
         # 4. Scoring
         results = []
@@ -365,9 +501,49 @@ class DecisionEngine:
             total_dist = d_best + d_worst
             performance_score = (d_worst / total_dist) if total_dist != 0 else 0.5
             
-            results.append({"name": name, "score": round(performance_score, 4)})
+            results.append({
+                "name": name,
+                "score": round(performance_score, 4),
+                "weighted_values": weighted_matrix[name],
+                "original_values": opt['values']  # Keep original user inputs
+            })
 
-        return sorted(results, key=lambda x: x['score'], reverse=True)
+        # Sort by score
+        results = sorted(results, key=lambda x: x['score'], reverse=True)
+        
+        return results, ideal_best, weighted_matrix, criteria
+
+    def generate_reasoning(self, top_option, ideal_best, weighted_matrix, criteria, all_options):
+        """Generate reasoning statement with original user values"""
+        matching_criteria = []
+        threshold = 0.05  # Within 5% considered matching
+        
+        for crit in criteria:
+            c_id = crit['id']
+            option_weighted = top_option['weighted_values'][c_id]
+            ideal_value = ideal_best[c_id]
+            
+            # Check if this option matches ideal
+            if ideal_value != 0:
+                diff_pct = abs(option_weighted - ideal_value) / abs(ideal_value)
+            else:
+                diff_pct = abs(option_weighted - ideal_value)
+            
+            if diff_pct <= threshold:
+                # This criterion matches ideal - get the original user input
+                original_input = top_option['original_values'][c_id]
+                
+                matching_criteria.append({
+                    'name': crit['name'],
+                    'value': original_input,  # The actual value user entered
+                    'type': crit['type'],
+                    'weight': crit['weight']
+                })
+        
+        # Sort by weight (most important first)
+        matching_criteria.sort(key=lambda x: x['weight'], reverse=True)
+        
+        return matching_criteria
 
 def get_input(prompt, type_=str):
     while True:
@@ -380,16 +556,20 @@ def get_input(prompt, type_=str):
 
 def main():
     engine = DecisionEngine()
-    print("\n--- DECISION COMPANION SYSTEM ---")
-    goal = input("What are you deciding? (e.g., Best Laptop): ")
+    print("\n" + "="*70)
+    print("DECISION COMPANION SYSTEM")
+    print("="*70)
+    goal = input("\nWhat are you deciding? (e.g., Best Laptop): ")
 
     # 1. Gather Criteria
-    print("\nSTEP 1: Define Criteria (Ranked from Most Important to Least)")
+    print("\n" + "="*70)
+    print("STEP 1: Define Criteria (Ranked from Most Important to Least)")
+    print("="*70)
     num_crit = get_input("How many criteria? ", int)
     criteria = []
     for i in range(num_crit):
         print(f"\nPriority #{i+1}:")
-        name = get_input("  Name (e.g., Price): ")
+        name = get_input("  Name (e.g., Price, Processor, Cost): ")
         c_type = get_input("  Type (1 for Benefit/Higher is better, 2 for Cost/Lower is better): ")
         criteria.append({
             "id": f"c{i}", 
@@ -402,26 +582,89 @@ def main():
     for i, crit in enumerate(criteria):
         crit['weight'] = weights[i]
 
+    print("\n" + "-"*70)
+    print("AUTO-ASSIGNED WEIGHTS (Based on Priority):")
+    print("-"*70)
+    for i, crit in enumerate(criteria):
+        print(f"  Priority #{i+1}: {crit['name']:<20} {crit['weight']*100:>6.2f}%")
+
     # 2. Gather Options
-    print("\nSTEP 2: Define Options")
+    print("\n" + "="*70)
+    print("STEP 2: Define Options")
+    print("="*70)
     num_opts = get_input("How many options to compare? ", int)
     options = []
     for i in range(num_opts):
-        opt_name = get_input(f"  Name for Option {i+1}: ")
+        opt_name = get_input(f"\nName for Option {i+1}: ")
         opt_values = {}
-        print(f"  Enter values for {opt_name} (use numbers or 'High', 'Medium', 'Low'):")
+        print(f"Enter values for '{opt_name}' (use numbers or 'High', 'Medium', 'Low'):")
         for crit in criteria:
-            val = get_input(f"    {crit['name']}: ")
+            val = get_input(f"  {crit['name']}: ")
             opt_values[crit['id']] = val
         options.append({"name": opt_name, "values": opt_values})
 
     # 3. Calculate and Display
-    print("\n--- RESULTS ---")
-    results = engine.run_topsis(options, criteria)
+    print("\n" + "="*70)
+    print("ANALYZING...")
+    print("="*70)
     
+    results, ideal_best, weighted_matrix, criteria_list = engine.run_topsis(options, criteria)
+    
+    # Show ranking
+    print("\n" + "="*70)
+    print("RESULTS:")
+    print("="*70)
     for i, res in enumerate(results, 1):
-        status = "🏆 RECOMMENDED" if i == 1 else f"Rank {i}"
-        print(f"{status}: {res['name']} (Match Score: {res['score']*100:.2f}%)")
+        if i == 1:
+            print(f"🏆 {res['name']:<30} Score: {res['score']*100:>6.2f}%")
+        else:
+            print(f"{i}.  {res['name']:<30} Score: {res['score']*100:>6.2f}%")
+    
+    # Generate and show reasoning
+    if results:
+        top_option = results[0]
+        matching_criteria = engine.generate_reasoning(
+            top_option, ideal_best, weighted_matrix, criteria_list, results
+        )
+        
+        print("\n" + "="*70)
+        print("WHY THIS OPTION WON:")
+        print("="*70)
+        
+        if matching_criteria:
+            # Build the statement
+            option_name = top_option['name']
+            
+            # Create pairs of "adjective + criterion"
+            criterion_phrases = []
+            for mc in matching_criteria:
+                value_str = str(mc['value'])
+                criterion_name = mc['name'].lower()
+                
+                # Build the phrase
+                phrase = f"{value_str} {criterion_name}"
+                criterion_phrases.append(phrase)
+            
+            # Format the statement
+            if len(criterion_phrases) == 1:
+                statement = f"'{option_name}' is the best option due to its {criterion_phrases[0]}."
+            elif len(criterion_phrases) == 2:
+                statement = f"'{option_name}' is the best option due to its {criterion_phrases[0]} and {criterion_phrases[1]}."
+            else:
+                # Three or more criteria
+                all_but_last = ", ".join(criterion_phrases[:-1])
+                statement = f"'{option_name}' is the best option due to its {all_but_last}, and {criterion_phrases[-1]}."
+            
+            print(f"\n{statement}")
+            print("\nThese criteria match or are very close to the ideal solution.")
+            
+        else:
+            print(f"\n'{top_option['name']}' is the best overall option based on")
+            print("the weighted combination of all criteria.")
+    
+    print("\n" + "="*70)
+    print("Thank you for using Decision Companion System!")
+    print("="*70 + "\n")
 
 if __name__ == "__main__":
     main()

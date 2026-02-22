@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Decision Companion System</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 40px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+
+      .header p {
+        font-size: 1.1em;
+        opacity: 0.9;
+      }
+
+      .content {
+        padding: 40px;
+      }
+
+      .section {
+        margin-bottom: 40px;
+      }
+
+      .section-title {
+        font-size: 1.5em;
+        color: #667eea;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .section-title::before {
+        content: "";
+        width: 4px;
+        height: 30px;
+        background: #667eea;
+        border-radius: 2px;
+      }
+
+      .input-group {
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 8px;
+      }
+
+      input[type="text"],
+      input[type="number"],
+      select {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 1em;
+        transition: border-color 0.3s;
+      }
+
+      input[type="text"]:focus,
+      input[type="number"]:focus,
+      select:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .btn {
+        padding: 12px 30px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .btn-primary {
+        background: #667eea;
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: #5568d3;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-secondary {
+        background: #f0f0f0;
+        color: #333;
+      }
+
+      .btn-secondary:hover {
+        background: #e0e0e0;
+      }
+
+      .btn-danger {
+        background: #e74c3c;
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: #c0392b;
+      }
+
+      .criteria-list,
+      .options-list {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .criteria-item,
+      .option-item {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 4px solid #667eea;
+      }
+
+      .criteria-item-header,
+      .option-item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+
+      .priority-badge {
+        background: #667eea;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        font-weight: 600;
+      }
+
+      .criteria-inputs,
+      .option-inputs {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 15px;
+      }
+
+      .option-values {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+      }
+
+      .add-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 15px;
+      }
+
+      .results-container {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 30px;
+        margin-top: 30px;
+        display: none;
+      }
+
+      .results-container.show {
+        display: block;
+        animation: slideIn 0.5s ease;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .result-item {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s;
+      }
+
+      .result-item:hover {
+        transform: translateX(5px);
+      }
+
+      .result-item.winner {
+        border: 3px solid #667eea;
+        background: linear-gradient(135deg, #667eea10 0%, #764ba210 100%);
+      }
+
+      .result-rank {
+        font-size: 1.5em;
+        font-weight: 700;
+        color: #667eea;
+        min-width: 50px;
+      }
+
+      .result-name {
+        flex: 1;
+        font-size: 1.2em;
+        font-weight: 600;
+        color: #333;
+      }
+
+      .result-score {
+        font-size: 1.3em;
+        font-weight: 700;
+        color: #667eea;
+      }
+
+      .trophy {
+        font-size: 2em;
+        margin-right: 15px;
+      }
+
+      .reasoning-box {
+        background: white;
+        border-left: 4px solid #52c41a;
+        padding: 25px;
+        border-radius: 10px;
+        margin-top: 20px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .reasoning-title {
+        font-size: 1.3em;
+        font-weight: 700;
+        color: #52c41a;
+        margin-bottom: 15px;
+      }
+
+      .reasoning-text {
+        font-size: 1.1em;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .criteria-weights {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-top: 20px;
+      }
+
+      .weight-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #e0e0e0;
+      }
+
+      .weight-item:last-child {
+        border-bottom: none;
+      }
+
+      .weight-bar {
+        height: 8px;
+        background: #667eea;
+        border-radius: 4px;
+        margin-top: 5px;
+      }
+
+      .analyze-btn-container {
+        text-align: center;
+        margin-top: 40px;
+      }
+
+      .analyze-btn {
+        padding: 15px 50px;
+        font-size: 1.2em;
+      }
+
+      .loading {
+        display: none;
+        text-align: center;
+        padding: 20px;
+      }
+
+      .loading.show {
+        display: block;
+      }
+
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .error-message {
+        background: #fee;
+        color: #c33;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 15px 0;
+        display: none;
+      }
+
+      .error-message.show {
+        display: block;
+      }
+
+      @media (max-width: 768px) {
+        .criteria-inputs,
+        .option-inputs {
+          grid-template-columns: 1fr;
+        }
+
+        .header h1 {
+          font-size: 1.8em;
+        }
+
+        .content {
+          padding: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🎯 Decision Companion System</h1>
+        <p>Make better decisions using multi-criteria analysis</p>
+      </div>
+
+      <div class="content">
+        <!-- Decision Goal -->
+        <div class="section">
+          <div class="input-group">
+            <label for="decision-goal">What are you deciding?</label>
+            <input
+              type="text"
+              id="decision-goal"
+              placeholder="e.g., Best Laptop, Job Offer, Travel Destination"
+            />
+          </div>
+        </div>
+
+        <!-- Criteria Section -->
+        <div class="section">
+          <div class="section-title">
+            Step 1: Define Criteria (Priority Order)
+          </div>
+          <p style="color: #666; margin-bottom: 20px">
+            Enter criteria from most important to least important. Weights will
+            be auto-assigned.
+          </p>
+
+          <div id="criteria-list" class="criteria-list">
+            <!-- Criteria items will be added here -->
+          </div>
+
+          <button class="btn btn-secondary add-btn" onclick="addCriterion()">
+            <span>➕</span> Add Criterion
+          </button>
+        </div>
+
+        <!-- Options Section -->
+        <div class="section">
+          <div class="section-title">Step 2: Define Options</div>
+
+          <div id="options-list" class="options-list">
+            <!-- Option items will be added here -->
+          </div>
+
+          <button class="btn btn-secondary add-btn" onclick="addOption()">
+            <span>➕</span> Add Option
+          </button>
+        </div>
+
+        <!-- Analyze Button -->
+        <div class="analyze-btn-container">
+          <button
+            class="btn btn-primary analyze-btn"
+            onclick="analyzeDecision()"
+          >
+            🔍 Analyze Decision
+          </button>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+          <div class="spinner"></div>
+          <p style="margin-top: 15px; color: #667eea; font-weight: 600">
+            Analyzing your decision...
+          </p>
+        </div>
+
+        <!-- Error Message -->
+        <div id="error-message" class="error-message"></div>
+
+        <!-- Results -->
+        <div id="results" class="results-container">
+          <!-- Results will be displayed here -->
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let criteriaCount = 0;
+      let optionsCount = 0;
+
+      // Add initial criterion and option
+      window.onload = function () {
+        addCriterion();
+        addOption();
+      };
+
+      function addCriterion() {
+        criteriaCount++;
+        const criteriaList = document.getElementById("criteria-list");
+
+        const criterionDiv = document.createElement("div");
+        criterionDiv.className = "criteria-item";
+        criterionDiv.id = `criterion-${criteriaCount}`;
+
+        criterionDiv.innerHTML = `
+                <div class="criteria-item-header">
+                    <span class="priority-badge">Priority #${criteriaCount}</span>
+                    <button class="btn btn-danger" onclick="removeCriterion(${criteriaCount})" style="padding: 5px 15px; font-size: 0.9em;">Remove</button>
+                </div>
+                <div class="criteria-inputs">
+                    <div class="input-group">
+                        <label>Criterion Name</label>
+                        <input type="text" id="criteria-name-${criteriaCount}" placeholder="e.g., Price, Performance, Quality">
+                    </div>
+                    <div class="input-group">
+                        <label>Type</label>
+                        <select id="criteria-type-${criteriaCount}">
+                            <option value="benefit">Benefit (Higher is better)</option>
+                            <option value="cost">Cost (Lower is better)</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+
+        criteriaList.appendChild(criterionDiv);
+        updatePriorities();
+      }
+
+      function removeCriterion(id) {
+        const criterion = document.getElementById(`criterion-${id}`);
+        if (criterion) {
+          criterion.remove();
+          updatePriorities();
+        }
+      }
+
+      function updatePriorities() {
+        const criteria = document.querySelectorAll(".criteria-item");
+        criteria.forEach((item, index) => {
+          const badge = item.querySelector(".priority-badge");
+          if (badge) {
+            badge.textContent = `Priority #${index + 1}`;
+          }
+        });
+      }
+
+      function addOption() {
+        optionsCount++;
+        const optionsList = document.getElementById("options-list");
+
+        const optionDiv = document.createElement("div");
+        optionDiv.className = "option-item";
+        optionDiv.id = `option-${optionsCount}`;
+
+        optionDiv.innerHTML = `
+                <div class="option-item-header">
+                    <h3 style="color: #667eea;">Option #${optionsCount}</h3>
+                    <button class="btn btn-danger" onclick="removeOption(${optionsCount})" style="padding: 5px 15px; font-size: 0.9em;">Remove</button>
+                </div>
+                <div class="input-group">
+                    <label>Option Name</label>
+                    <input type="text" id="option-name-${optionsCount}" placeholder="e.g., Laptop A, Job Offer X">
+                </div>
+                <div id="option-values-${optionsCount}" class="option-values">
+                    <!-- Values will be added dynamically -->
+                </div>
+            `;
+
+        optionsList.appendChild(optionDiv);
+        updateOptionValues(optionsCount);
+      }
+
+      function removeOption(id) {
+        const option = document.getElementById(`option-${id}`);
+        if (option) {
+          option.remove();
+        }
+      }
+
+      function updateOptionValues(optionId) {
+        const criteria = document.querySelectorAll(".criteria-item");
+        const valuesContainer = document.getElementById(
+          `option-values-${optionId}`,
+        );
+
+        if (!valuesContainer) return;
+
+        valuesContainer.innerHTML = "";
+
+        criteria.forEach((criterion, index) => {
+          const criterionId = criterion.id.split("-")[1];
+          const criterionNameInput = document.getElementById(
+            `criteria-name-${criterionId}`,
+          );
+          const criterionName = criterionNameInput
+            ? criterionNameInput.value || `Criterion ${index + 1}`
+            : `Criterion ${index + 1}`;
+
+          const valueDiv = document.createElement("div");
+          valueDiv.className = "input-group";
+          valueDiv.innerHTML = `
+                    <label>${criterionName}</label>
+                    <input type="text" id="option-${optionId}-value-${index}" placeholder="e.g., High, Low, 1200, 85">
+                `;
+          valuesContainer.appendChild(valueDiv);
+        });
+      }
+
+      // Update option value fields when criteria change
+      document.addEventListener("input", function (e) {
+        if (e.target.id.startsWith("criteria-name-")) {
+          for (let i = 1; i <= optionsCount; i++) {
+            updateOptionValues(i);
+          }
+        }
+      });
+
+      function analyzeDecision() {
+        // Clear previous results
+        document.getElementById("results").classList.remove("show");
+        document.getElementById("error-message").classList.remove("show");
+
+        // Get decision goal
+        const goal = document.getElementById("decision-goal").value.trim();
+
+        // Get criteria
+        const criteria = [];
+        const criteriaElements = document.querySelectorAll(".criteria-item");
+
+        criteriaElements.forEach((elem, index) => {
+          const id = elem.id.split("-")[1];
+          const name = document
+            .getElementById(`criteria-name-${id}`)
+            .value.trim();
+          const type = document.getElementById(`criteria-type-${id}`).value;
+
+          if (name) {
+            criteria.push({ name, type });
+          }
+        });
+
+        // Get options
+        const options = [];
+        const optionElements = document.querySelectorAll(".option-item");
+
+        optionElements.forEach((elem) => {
+          const id = elem.id.split("-")[1];
+          const name = document
+            .getElementById(`option-name-${id}`)
+            .value.trim();
+
+          if (name) {
+            const values = [];
+            criteria.forEach((_, index) => {
+              const valueInput = document.getElementById(
+                `option-${id}-value-${index}`,
+              );
+              if (valueInput) {
+                values.push(valueInput.value.trim());
+              }
+            });
+
+            options.push({ name, values });
+          }
+        });
+
+        // Validation
+        if (!goal) {
+          showError("Please enter what you are deciding.");
+          return;
+        }
+
+        if (criteria.length < 2) {
+          showError("Please add at least 2 criteria.");
+          return;
+        }
+
+        if (options.length < 2) {
+          showError("Please add at least 2 options.");
+          return;
+        }
+
+        // Check if all values are filled
+        for (let option of options) {
+          if (
+            option.values.length !== criteria.length ||
+            option.values.some((v) => !v)
+          ) {
+            showError(`Please fill all values for "${option.name}".`);
+            return;
+          }
+        }
+
+        // Show loading
+        document.getElementById("loading").classList.add("show");
+
+        // Send to backend
+        fetch("/analyze", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            goal: goal,
+            criteria: criteria,
+            options: options,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            document.getElementById("loading").classList.remove("show");
+
+            if (data.error) {
+              showError(data.error);
+            } else {
+              displayResults(data);
+            }
+          })
+          .catch((error) => {
+            document.getElementById("loading").classList.remove("show");
+            showError("An error occurred: " + error.message);
+          });
+      }
+
+      function showError(message) {
+        const errorDiv = document.getElementById("error-message");
+        errorDiv.textContent = message;
+        errorDiv.classList.add("show");
+
+        setTimeout(() => {
+          errorDiv.classList.remove("show");
+        }, 5000);
+      }
+
+      function displayResults(data) {
+        const resultsDiv = document.getElementById("results");
+
+        let html = `
+                <h2 style="color: #667eea; margin-bottom: 20px;">📊 Analysis Results: ${data.goal}</h2>
+                
+                <div class="criteria-weights">
+                    <h3 style="color: #667eea; margin-bottom: 15px;">Auto-Assigned Weights</h3>
+            `;
+
+        data.criteria.forEach((crit, index) => {
+          html += `
+                    <div class="weight-item">
+                        <span><strong>Priority #${index + 1}:</strong> ${crit.name} (${crit.type === "benefit" ? "↑ Higher is better" : "↓ Lower is better"})</span>
+                        <span style="font-weight: 700; color: #667eea;">${crit.weight.toFixed(2)}%</span>
+                    </div>
+                    <div class="weight-bar" style="width: ${crit.weight}%"></div>
+                `;
+        });
+
+        html += `</div>`;
+
+        html += `<h3 style="color: #667eea; margin-top: 30px; margin-bottom: 15px;">🏆 Ranking</h3>`;
+
+        data.results.forEach((result, index) => {
+          const isWinner = index === 0;
+          html += `
+                    <div class="result-item ${isWinner ? "winner" : ""}">
+                        ${isWinner ? '<span class="trophy">🏆</span>' : ""}
+                        <span class="result-rank">${isWinner ? "🥇" : result.rank + "."}</span>
+                        <span class="result-name">${result.name}</span>
+                        <span class="result-score">${result.score.toFixed(2)}%</span>
+                    </div>
+                `;
+        });
+
+        if (data.reasoning) {
+          html += `
+                    <div class="reasoning-box">
+                        <div class="reasoning-title">💡 Why This Option Won</div>
+                        <div class="reasoning-text">${data.reasoning}</div>
+                        <p style="margin-top: 10px; color: #666; font-size: 0.95em;">These criteria match or are very close to the ideal solution.</p>
+                    </div>
+                `;
+        }
+
+        resultsDiv.innerHTML = html;
+        resultsDiv.classList.add("show");
+
+        // Scroll to results
+        resultsDiv.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    </script>
+  </body>
+</html>
