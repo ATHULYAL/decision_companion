@@ -672,8 +672,11 @@
 #     main()
 
 #future change in criteria monte carlo approach
+#!/usr/bin/env python3
 import math
-import numpy as np
+import random
+import copy
+
 
 class DecisionEngine:
     def __init__(self):
@@ -691,21 +694,25 @@ class DecisionEngine:
     def _to_float(self, value):
         if value is None: return 5.0
         if isinstance(value, str):
-            val = value.lower().strip()
-            return float(self.qualitative_map.get(val, 5.0))
+            # Try numeric first, then qualitative label
+            try:
+                return float(value.strip())
+            except ValueError:
+                return float(self.qualitative_map.get(value.lower().strip(), 5.0))
         return float(value)
 
     def run_topsis(self, options, criteria):
+        # Normalise + weight
         norm_matrix = {}
         for crit in criteria:
             c_id = crit['id']
-            sq_sum = sum(opt['values'][c_id]**2 for opt in options)
+            sq_sum = sum(opt['values'][c_id] ** 2 for opt in options)
             denominator = math.sqrt(sq_sum) if sq_sum > 0 else 1
-
             for opt in options:
-                if opt['name'] not in norm_matrix: norm_matrix[opt['name']] = {}
+                norm_matrix.setdefault(opt['name'], {})
                 norm_matrix[opt['name']][c_id] = (opt['values'][c_id] / denominator) * crit['weight']
 
+        # Ideal best and worst
         ideal_best, ideal_worst = {}, {}
         for crit in criteria:
             c_id = crit['id']
@@ -715,79 +722,247 @@ class DecisionEngine:
             else:
                 ideal_best[c_id], ideal_worst[c_id] = min(vals), max(vals)
 
+        # Score
         results = []
         for opt in options:
             name = opt['name']
-            d_best = math.sqrt(sum((norm_matrix[name][c['id']] - ideal_best[c['id']])**2 for c in criteria))
-            d_worst = math.sqrt(sum((norm_matrix[name][c['id']] - ideal_worst[c['id']])**2 for c in criteria))
+            d_best  = math.sqrt(sum((norm_matrix[name][c['id']] - ideal_best[c['id']]) ** 2 for c in criteria))
+            d_worst = math.sqrt(sum((norm_matrix[name][c['id']] - ideal_worst[c['id']]) ** 2 for c in criteria))
             score = d_worst / (d_best + d_worst) if (d_best + d_worst) > 0 else 0.5
             results.append({"name": name, "score": score})
 
-        return sorted(results, key=lambda x: x['score'], reverse=True)
+        return sorted(results, key=lambda x: x['score'], reverse=True), ideal_best, ideal_worst, norm_matrix
 
     def simulate_decision(self, options, criteria, iterations=1000):
         win_counts = {opt['name']: 0 for opt in options}
-        
-        # Initial conversion of user strings to floats
-        for opt in options:
-            opt['values'] = {c['id']: self._to_float(opt['values'].get(c['id'])) for c in criteria}
+
+        # BUG 3 FIX: build float_options as a NEW list, never mutate the passed-in options
+        float_options = [
+            {
+                "name": opt['name'],
+                "values": {c['id']: self._to_float(opt['values'].get(c['id'])) for c in criteria}
+            }
+            for opt in options
+        ]
 
         for _ in range(iterations):
-            shared_variations = {c['id']: np.random.normal(0, 1.2) for c in criteria if c.get('dynamic')}
+            shared_shift = {c['id']: random.gauss(0, 1.2) for c in criteria if c.get('dynamic')}
+
             sim_options = []
-            for opt in options:
+            for opt in float_options:
                 temp_vals = opt['values'].copy()
-                for c_id, variation in shared_variations.items():
-                    temp_vals[c_id] = max(1, min(10, temp_vals[c_id] + variation))
+                for c_id, shift in shared_shift.items():
+                    temp_vals[c_id] = max(1, min(9, temp_vals[c_id] + shift + random.gauss(0, 0.3)))
                 sim_options.append({"name": opt['name'], "values": temp_vals})
 
-            pass_results = self.run_topsis(sim_options, criteria)
+            pass_results, _, _, _ = self.run_topsis(sim_options, criteria)
             win_counts[pass_results[0]['name']] += 1
 
-        return sorted([{"name": n, "confidence": round((c/iterations)*100, 2)} for n, c in win_counts.items()], 
-                      key=lambda x: x['confidence'], reverse=True)
+        return sorted(
+            [{"name": n, "confidence": round((c / iterations) * 100, 2)} for n, c in win_counts.items()],
+            key=lambda x: x['confidence'], reverse=True
+        )
+
+    def explain_all(self, options, criteria):
+        """
+        BUG 1 FIX: Run TOPSIS exactly ONCE and build explanations for ALL options
+        from that single pass. Previously explain_winner was called N+1 times.
+
+        BUG 2 FIX: ideal shown to user is the best raw value on the 1-9 scale,
+        not the internal normalised TOPSIS number which is meaningless to users.
+        """
+        results, ideal_best, ideal_worst, norm_matrix = self.run_topsis(options, criteria)
+
+        # Build ideal in original scale (best actual value per criterion across all options)
+        ideal_raw = {}
+        for crit in criteria:
+            c_id = crit['id']
+            raw_vals = [opt['values'][c_id] for opt in options]
+            if crit['type'] == 'benefit':
+                ideal_raw[c_id] = max(raw_vals)   # best = highest
+            else:
+                ideal_raw[c_id] = min(raw_vals)   # best = lowest
+
+        all_explanations = {}
+
+        for opt in options:
+            opt_name = opt['name']
+            opt_norm = norm_matrix[opt_name]
+            explanation = []
+
+            for crit in criteria:
+                c_id       = crit['id']
+                actual     = opt['values'][c_id]
+                ib         = ideal_best[c_id]
+                iw         = ideal_worst[c_id]
+                wv         = opt_norm[c_id]
+                ideal_range = abs(ib - iw)
+
+                gap_pct = abs(wv - ib) / ideal_range * 100 if ideal_range > 0 else 0.0
+
+                all_vals = [norm_matrix[o['name']][c_id] for o in options]
+                is_best  = (wv == max(all_vals) if crit['type'] == 'benefit' else wv == min(all_vals))
+
+                explanation.append({
+                    "name":      crit['name'],
+                    "actual":    actual,
+                    "ideal_raw": ideal_raw[c_id],   # BUG 2 FIX: real scale value
+                    "gap_pct":   round(gap_pct, 1),
+                    "is_best":   is_best,
+                    "type":      crit['type'],
+                    "weight":    crit['weight'],
+                })
+
+            explanation.sort(key=lambda x: x['gap_pct'])
+            all_explanations[opt_name] = explanation
+
+        return all_explanations
+
+
+# ── Input Helpers ─────────────────────────────────────────────────────────────
+
+def get_input(prompt, type_=str):
+    while True:
+        try:
+            val = input(prompt).strip()
+            if not val:
+                continue
+            return type_(val)
+        except ValueError:
+            print(f"  ⚠  Please enter a valid {type_.__name__}.")
+
+def get_criterion_type(prompt):
+    # BUG 4 FIX: only accept exactly "1" or "2", loop until valid
+    while True:
+        val = input(prompt).strip()
+        if val == "1": return "benefit"
+        if val == "2": return "cost"
+        print("  ⚠  Please enter 1 or 2.")
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def interactive_cli():
     engine = DecisionEngine()
-    print("--- Decision Companion System ---")
-    decision_goal = input("What decision are you making? (e.g., Choosing a Laptop): ")
+    print("\n" + "=" * 60)
+    print("  DECISION COMPANION SYSTEM")
+    print("=" * 60)
 
-    # 1. Collect Criteria
-    num_crit = int(input("\nHow many criteria will you judge by? "))
+    decision_goal = input("\nWhat decision are you making? ")
+
+    # 1. Criteria
+    print("\n" + "-" * 60)
+    print("  CRITERIA  (most → least important)")
+    print("-" * 60)
+    num_crit = get_input("\nHow many criteria? ", int)
     criteria_list = []
-    print("Enter criteria in order of importance (Most important first):")
-    for i in range(num_crit):
-        name = input(f"Criterion {i+1} Name: ")
-        c_type = input("Is this a 'benefit' (more is better) or 'cost' (less is better)? ").lower()
-        is_dynamic = input("Is this value uncertain/likely to change? (y/n): ").lower() == 'y'
-        criteria_list.append({"id": f"c{i}", "name": name, "type": c_type, "dynamic": is_dynamic})
 
-    # Auto-calculate weights using ROC
+    for i in range(num_crit):
+        print(f"\n  Criterion #{i+1}:")
+        name       = get_input("    Name: ")
+        c_type     = get_criterion_type("    Type  1=Benefit (↑ better)  2=Cost (↓ better): ")
+        is_dynamic = input("    Dynamic/uncertain? (y/n): ").lower().strip() == 'y'
+        criteria_list.append({
+            "id":      f"c{i}",
+            "name":    name,
+            "type":    c_type,
+            "dynamic": is_dynamic
+        })
+
     weights = engine.calculate_roc_weights(num_crit)
     for i, c in enumerate(criteria_list):
         c['weight'] = weights[i]
 
-    # 2. Collect Options
-    num_opts = int(input("\nHow many options are you comparing? "))
+    print("\n  Weights assigned:")
+    for c in criteria_list:
+        tag = "  🔄 dynamic" if c['dynamic'] else ""
+        print(f"    {c['name']:<24} {c['weight']*100:.2f}%{tag}")
+
+    # 2. Options
+    print("\n" + "-" * 60)
+    print("  OPTIONS")
+    print("  Use numbers (1-9) or: Very Low / Low / Medium / High / Very High")
+    print("-" * 60)
+    num_opts = get_input("\nHow many options? ", int)
     options_list = []
+
     for j in range(num_opts):
-        opt_name = input(f"\nName of Option {j+1}: ")
+        opt_name = get_input(f"\n  Option {j+1} name: ")
         opt_values = {}
-        print(f"Rate {opt_name} (Use 1-10 or 'low', 'medium', 'high'):")
         for c in criteria_list:
-            val = input(f"  {c['name']}: ")
+            val = get_input(f"    {c['name']}: ")
             opt_values[c['id']] = val
         options_list.append({"name": opt_name, "values": opt_values})
 
-    # 3. Process
-    print(f"\nSimulating 1,000 futures for: {decision_goal}...")
+    # 3. Convert to floats then deepcopy BEFORE simulation
+    for opt in options_list:
+        opt['values'] = {c['id']: engine._to_float(opt['values'].get(c['id'])) for c in criteria_list}
+    original_options = copy.deepcopy(options_list)
+
+    # 4. Simulate
+    print(f"\n  Simulating 1,000 futures for: {decision_goal}...")
     results = engine.simulate_decision(options_list, criteria_list)
 
-    # 4. Output
-    print("\n--- FINAL RECOMMENDATION ---")
+    # 5. Results
+    print("\n" + "=" * 60)
+    print("  SIMULATION RESULTS")
+    print("=" * 60)
     for r in results:
-        star = "⭐" if r['confidence'] > 50 else ""
-        print(f"{star} {r['name']}: {r['confidence']}% Confidence")
+        bar  = "█" * int(r['confidence'] / 2)
+        star = "🏆" if r == results[0] else "  "
+        print(f"  {star} {r['name']:<20} {r['confidence']:>6.2f}%  {bar}")
+
+    # 6. Why it won + full breakdown — BUG 1 FIX: single TOPSIS call for everything
+    winner = results[0]['name']
+    all_explanations = engine.explain_all(original_options, criteria_list)
+    winner_explanation = all_explanations[winner]
+
+    print("\n" + "=" * 60)
+    print(f"  WHY '{winner}' WON")
+    print("=" * 60)
+    print("  Comparing winner's values against the ideal case:\n")
+
+    # Single sentence using best criterion (smallest gap, highest weight as tiebreak)
+    best = min(winner_explanation, key=lambda e: (e['gap_pct'], -e['weight']))
+    print(f"  '{winner}' is selected due to its {best['name']} "
+          f"(value={best['actual']:.1f}) being closest to the ideal "
+          f"(ideal={best['ideal_raw']:.1f}, gap={best['gap_pct']:.1f}%).")
+
+    # Full breakdown for all options
+    print("\n" + "=" * 60)
+    print("  OPTION BREAKDOWN")
+    print("=" * 60)
+
+    for opt in original_options:
+        opt_name   = opt['name']
+        expl       = all_explanations[opt_name]
+        strengths  = [e for e in expl if e['gap_pct'] <= 40]
+        weaknesses = [e for e in expl if e['gap_pct'] >  40]
+
+        rank       = next(i+1 for i, r in enumerate(results) if r['name'] == opt_name)
+        confidence = next(r['confidence'] for r in results if r['name'] == opt_name)
+        marker     = "🏆" if rank == 1 else f"#{rank}"
+
+        print(f"\n  {marker} {opt_name}  ({confidence:.1f}% confidence)")
+        print(f"  {'─' * 40}")
+
+        if strengths:
+            print("    Strengths:")
+            for e in strengths:
+                print(f"      ✅ {e['name']:<20} value={e['actual']:.1f}  "
+                      f"ideal={e['ideal_raw']:.1f}  gap={e['gap_pct']:.1f}%")
+
+        if weaknesses:
+            print("    Weaknesses:")
+            for e in weaknesses:
+                print(f"      ❌ {e['name']:<20} value={e['actual']:.1f}  "
+                      f"ideal={e['ideal_raw']:.1f}  gap={e['gap_pct']:.1f}%")
+
+    print("\n" + "=" * 60)
+
 
 if __name__ == "__main__":
-    interactive_cli()
+    try:
+        interactive_cli()
+    except KeyboardInterrupt:
+        print("\n\n  Cancelled.\n")
