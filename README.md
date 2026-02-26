@@ -392,7 +392,3 @@ Decision stability analysis under uncertainty.
 
 ---
 
-## Author
-
-Athulya L
-Computer Science Engineering
