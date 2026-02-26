@@ -83,15 +83,12 @@ Qualitative values are converted into numerical scores.
 
 This produces the **decision matrix**
 
-[
-X =
-\begin{bmatrix}
-x_{11} & x_{12} & ... & x_{1n} \
-x_{21} & x_{22} & ... & x_{2n} \
-... & ... & ... & ... \
-x_{m1} & x_{m2} & ... & x_{mn}
-\end{bmatrix}
-]
+| Option | C1  | C2  | C3  |
+| ------ | --- | --- | --- |
+| A      | x11 | x12 | x13 |
+| B      | x21 | x22 | x23 |
+| C      | x31 | x32 | x33 |
+
 
 Where:
 
