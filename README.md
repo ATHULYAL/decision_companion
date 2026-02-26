@@ -89,33 +89,29 @@ This produces the **decision matrix**
 | B      | x21 | x22 | x23 |
 | C      | x31 | x32 | x33 |
 
-
 Where:
 
-* (m) = number of options
-* (n) = number of criteria
-* (x_{ij}) = value of option i for criterion j
+* m = number of options
+* n = number of criteria
+* xij = value of option i for criterion j
 
 ---
 
 ## Step 3 — ROC Weight Calculation
 
-Criteria weights are calculated automatically using **Rank Order Centroid (ROC)**.
+Criteria weights are calculated automatically using **Rank Order Centroid (ROC).**
 
-If there are **n criteria**, weight for criterion with rank **r** is:
+Weight for criterion with rank **r**:
 
-[
-W_r =
-\frac{1}{n}
-\sum_{i=r}^{n}
-\frac{1}{i}
-]
+```
+Wr = (1/n) × (1/r + 1/(r+1) + ... + 1/n)
+```
 
 Where:
 
-* (n) = number of criteria
-* (r) = rank
-* (W_r) = weight
+* n = number of criteria
+* r = rank
+* Wr = weight
 
 Properties:
 
@@ -128,18 +124,16 @@ Properties:
 
 Criteria may have different scales. Normalization removes scale differences.
 
-Vector normalization is used:
+Vector normalization:
 
-[
-r_{ij} =
-\frac{x_{ij}}
-{\sqrt{\sum_{i=1}^{m} x_{ij}^{2}}}
-]
+```
+rij = xij / sqrt(x1j² + x2j² + ... + xmj²)
+```
 
 Where:
 
-* (x_{ij}) = original value
-* (r_{ij}) = normalized value
+* xij = original value
+* rij = normalized value
 
 ---
 
@@ -147,26 +141,14 @@ Where:
 
 Normalized values are multiplied by ROC weights.
 
-[
-v_{ij} = w_j \times r_{ij}
-]
+```
+vij = wj × rij
+```
 
 Where:
 
-* (w_j) = ROC weight
-* (r_{ij}) = normalized value
-
-Matrix:
-
-[
-V =
-\begin{bmatrix}
-v_{11} & v_{12} & ... & v_{1n} \
-v_{21} & v_{22} & ... & v_{2n} \
-... & ... & ... & ... \
-v_{m1} & v_{m2} & ... & v_{mn}
-\end{bmatrix}
-]
+* wj = ROC weight
+* rij = normalized value
 
 ---
 
@@ -176,12 +158,9 @@ TOPSIS defines two reference points.
 
 ### Ideal Best
 
-[
-A^+ =
-\left(
-\max v_{ij}
-\right)
-]
+```
+A+ = max(v1j, v2j, ..., vmj)
+```
 
 Best value for each criterion.
 
@@ -189,12 +168,9 @@ Best value for each criterion.
 
 ### Ideal Worst
 
-[
-A^- =
-\left(
-\min v_{ij}
-\right)
-]
+```
+A- = min(v1j, v2j, ..., vmj)
+```
 
 Worst value for each criterion.
 
@@ -204,27 +180,17 @@ Worst value for each criterion.
 
 Euclidean distance is used.
 
-### Distance from Ideal Best
+Distance from Ideal Best:
 
-[
-D_i^+ =
-\sqrt{
-\sum_{j=1}^{n}
-(v_{ij} - A_j^+)^2
-}
-]
+```
+Di+ = sqrt( Σ (vij − Aj+)² )
+```
 
----
+Distance from Ideal Worst:
 
-### Distance from Ideal Worst
-
-[
-D_i^- =
-\sqrt{
-\sum_{j=1}^{n}
-(v_{ij} - A_j^-)^2
-}
-]
+```
+Di- = sqrt( Σ (vij − Aj-)² )
+```
 
 ---
 
@@ -232,16 +198,14 @@ D_i^- =
 
 Each option receives a score:
 
-[
-C_i =
-\frac{D_i^-}
-{D_i^+ + D_i^-}
-]
+```
+Ci = Di- / (Di+ + Di-)
+```
 
 Where:
 
-* (C_i) = closeness score
-* (0 \le C_i \le 1)
+* Ci = closeness score
+* 0 ≤ Ci ≤ 1
 
 Higher value indicates better option.
 
@@ -251,9 +215,9 @@ Higher value indicates better option.
 
 Options are ranked based on closeness score.
 
-[
-C_1, C_2, ..., C_m
-]
+```
+C1, C2, ..., Cm
+```
 
 Highest score = Best option.
 
@@ -269,23 +233,21 @@ Selected criteria values are varied randomly.
 
 For a criterion value:
 
-[
-x_{ij}
-]
+```
+xij
+```
 
 Modified value:
 
-[
-x_{ij}' = x_{ij} + \Delta
-]
+```
+xij' = xij + Δ
+```
 
 Where:
 
-[
-\Delta \sim RandomVariation
-]
-
-This produces multiple simulated scenarios.
+```
+Δ = random variation
+```
 
 For each simulation:
 
@@ -293,12 +255,11 @@ For each simulation:
 2. TOPSIS repeated
 3. Best option recorded
 
-If simulation count = (N)
+If simulation count = N
 
-[
-P(option_i) =
-\frac{\text{Times option i selected}}{N}
-]
+```
+P(option i) = Selection Count / N
+```
 
 Option with highest probability is considered **most robust.**
 
@@ -310,12 +271,9 @@ This is a **Monte Carlo sensitivity analysis approach.**
 
 For the selected option:
 
-Difference from ideal best:
-
-[
-Diff_j =
-|v_{best,j} - A_j^+|
-]
+```
+Diffj = | vbest,j − Aj+ |
+```
 
 Small difference → Important criterion.
 
@@ -329,23 +287,21 @@ Each option is compared with the ideal solution.
 
 Strength:
 
-[
-|v_{ij} - A_j^+| \text{ small}
-]
+```
+|vij − Aj+| is small
+```
 
 Weakness:
 
-[
-|v_{ij} - A_j^+| \text{ large}
-]
-
-This explains performance of each option.
+```
+|vij − Aj+| is large
+```
 
 ---
 
 ## Online Version
 
-[https://deccampanionhost.vercel.app/](https://deccampanionhost.vercel.app/)
+https://deccampanionhost.vercel.app/
 
 ---
 
@@ -436,3 +392,7 @@ Decision stability analysis under uncertainty.
 
 ---
 
+## Author
+
+Athulya L
+Computer Science Engineering
