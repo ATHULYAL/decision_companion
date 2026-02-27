@@ -67,6 +67,8 @@ Priority Order:
 2. Quality
 3. Location
 
+Note: Two or more criteria can share the same priority number. They will receive equal weight automatically.
+
 ---
 
 ## Step 2 — Qualitative to Numerical Conversion
@@ -117,6 +119,40 @@ Properties:
 
 * Higher rank → Higher weight
 * All weights sum to 1
+
+---
+
+### Tied Priority Handling
+
+If two or more criteria share the same priority rank, they occupy the same positions in the ordering. Their weights are averaged across those positions so all tied criteria receive equal weight.
+
+Example:
+
+Criteria: Quality (Priority 1), Distance (Priority 1), Cost (Priority 2)
+
+Base ROC weights for 3 criteria: W1, W2, W3
+
+Quality and Distance are both at rank 1, so they share positions 1 and 2:
+
+```
+Tied weight = (W1 + W2) / 2
+```
+
+Cost is at rank 2 and occupies position 3 normally:
+
+```
+Cost weight = W3
+```
+
+Result:
+
+| Criterion | Priority | Weight |
+| --------- | -------- | ------ |
+| Quality   | 1 (tied) | 44.44% |
+| Distance  | 1 (tied) | 44.44% |
+| Cost      | 2        | 11.11% |
+
+All weights still sum to 1.
 
 ---
 
@@ -367,7 +403,7 @@ http://127.0.0.1:5000
 
 ### Rank Order Centroid (ROC)
 
-Automatic criteria weight calculation.
+Automatic criteria weight calculation with support for tied priorities.
 
 ### TOPSIS
 
@@ -383,6 +419,7 @@ Decision stability analysis under uncertainty.
 
 * Mathematical decision making
 * Automatic weighting
+* Tied priority criteria handling (equal weight sharing)
 * Multi-criteria comparison
 * Decision explanation
 * Strength and weakness analysis
@@ -391,4 +428,3 @@ Decision stability analysis under uncertainty.
 * Web interface
 
 ---
-
