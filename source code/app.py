@@ -13,20 +13,8 @@ class DecisionEngine:
             "very low": 1, "low": 3, "medium": 5,
             "high": 7, "very high": 9
         }
-        self.value_label_map = {
-            1: "very low", 2: "very low",
-            3: "low",      4: "low",
-            5: "medium",   6: "medium",
-            7: "high",     8: "high",
-            9: "very high"
-        }
-
-    def value_to_label(self, value):
-        rounded = max(1, min(9, round(float(value))))
-        return self.value_label_map.get(rounded, "medium")
 
     def calculate_roc_weights(self, num_criteria):
-        """Standard ROC weights for strict priority order."""
         weights = []
         for i in range(1, num_criteria + 1):
             weight = sum(1.0 / j for j in range(i, num_criteria + 1)) / num_criteria
@@ -36,20 +24,13 @@ class DecisionEngine:
     def calculate_roc_weights_with_ties(self, priorities):
         """
         ROC weights that handle tied priorities.
-
         Tied criteria occupy the same positions in the ordering.
         Their weights are averaged so tied criteria are treated equally.
-
-        Example: priorities = [1, 1, 2]
-          - Positions 1 and 2 are both occupied by the tied pair.
-          - Each tied criterion gets avg(ROC_weight_1, ROC_weight_2).
-          - The third criterion gets ROC_weight_3 normally.
         """
         n = len(priorities)
         base_weights = self.calculate_roc_weights(n)
 
         sorted_unique = sorted(set(priorities))
-
         slot_cursor = 0
         priority_to_slots = {}
         for p in sorted_unique:
@@ -149,7 +130,6 @@ class DecisionEngine:
                 worst_raw[c_id] = max(raw_vals)
 
         all_explanations = {}
-
         for opt in options:
             opt_name = opt['name']
             opt_norm = norm_matrix[opt_name]
@@ -169,6 +149,7 @@ class DecisionEngine:
                 is_best  = (wv == max(all_vals) if crit['type'] == 'benefit' else wv == min(all_vals))
 
                 explanation.append({
+                    "id":       c_id,          # needed for raw value lookup
                     "name":     crit['name'],
                     "actual":   actual,
                     "gap_pct":  round(gap_pct, 1),
@@ -223,26 +204,63 @@ def analyze():
                 'weight':   weights[i]
             })
 
+        # Build options AND keep a map of raw user-entered values
         options = []
+        raw_values_map = {}   # {option_name: {c_id: original_string}}
         for opt in options_data:
-            option_values = {}
+            vals = {}
+            raw_vals = {}
             for i, value in enumerate(opt['values']):
-                option_values[f'c{i}'] = engine._to_float(value)
-            options.append({'name': opt['name'], 'values': option_values})
+                cid = f'c{i}'
+                vals[cid]     = engine._to_float(value)
+                raw_vals[cid] = str(value).strip()   # exactly what the user typed
+            options.append({'name': opt['name'], 'values': vals})
+            raw_values_map[opt['name']] = raw_vals
 
         original_options = copy.deepcopy(options)
 
         simulation_results = engine.simulate_decision(options, criteria, iterations=1000)
         all_explanations, topsis_results = engine.explain_all(original_options, criteria)
 
+        def find_differentiating_crit(opt_name, opt_expl, all_explanations, original_options):
+            """
+            Find the criterion that best explains WHY this option stands out.
+
+            Step 1: find criteria where this option is strictly better
+                    (lower gap_pct) than ALL other options.
+                    Among those, pick the highest-weight one.
+            Step 2: if no unique differentiator exists, fall back to
+                    lowest gap / highest weight.
+            """
+            other_names = [o['name'] for o in original_options if o['name'] != opt_name]
+
+            differentiating = []
+            for e in opt_expl:
+                cid        = e['id']
+                this_gap   = e['gap_pct']
+                others_gaps = [
+                    next(x['gap_pct'] for x in all_explanations[n] if x['id'] == cid)
+                    for n in other_names
+                ]
+                if all(this_gap < og for og in others_gaps):
+                    differentiating.append(e)
+
+            if differentiating:
+                return max(differentiating, key=lambda e: e['weight'])
+
+            # Fallback
+            return min(opt_expl, key=lambda e: (e['gap_pct'], -e['weight']))
+
         # Winner reasoning
         winner_name = simulation_results[0]['name']
         winner_expl = all_explanations[winner_name]
-        best_crit   = min(winner_expl, key=lambda e: (e['gap_pct'], -e['weight']))
-        value_label = engine.value_to_label(best_crit['actual'])
-        reasoning   = (
-            f"'{winner_name}' is selected due to its {value_label} "
-            f"{best_crit['name']}."
+        best_crit   = find_differentiating_crit(
+            winner_name, winner_expl, all_explanations, original_options
+        )
+        winner_raw_val = raw_values_map[winner_name][best_crit['id']]
+        reasoning = (
+            f"'{winner_name}' is selected due to its "
+            f"{best_crit['name']} of {winner_raw_val}."
         )
 
         # Per-option breakdown
@@ -253,11 +271,13 @@ def analyze():
             confidence = next(r['confidence'] for r in simulation_results if r['name'] == opt_name)
             rank       = next(i + 1 for i, r in enumerate(simulation_results) if r['name'] == opt_name)
 
-            opt_best_crit = min(expl, key=lambda e: (e['gap_pct'], -e['weight']))
-            opt_val_label = engine.value_to_label(opt_best_crit['actual'])
-            opt_sentence  = (
-                f"'{opt_name}' is notable for its {opt_val_label} "
-                f"{opt_best_crit['name']}."
+            opt_best_crit = find_differentiating_crit(
+                opt_name, expl, all_explanations, original_options
+            )
+            opt_raw_val  = raw_values_map[opt_name][opt_best_crit['id']]
+            opt_sentence = (
+                f"'{opt_name}' is notable for its "
+                f"{opt_best_crit['name']} of {opt_raw_val}."
             )
 
             strengths  = [e['name'] for e in expl if e['gap_pct'] <= 40]

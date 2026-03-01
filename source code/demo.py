@@ -969,6 +969,340 @@
 
 # criterias with same weight
 #!/usr/bin/env python3
+# import math
+# import random
+# import copy
+
+
+# class DecisionEngine:
+#     def __init__(self):
+#         self.qualitative_map = {
+#             "very low": 1, "low": 3, "medium": 5, "high": 7, "very high": 9
+#         }
+
+#     def calculate_roc_weights(self, num_criteria):
+#         """Standard ROC weights for strict priority order."""
+#         weights = []
+#         for i in range(1, num_criteria + 1):
+#             weight = sum(1.0 / j for j in range(i, num_criteria + 1)) / num_criteria
+#             weights.append(weight)
+#         return weights
+
+#     def calculate_roc_weights_with_ties(self, priorities):
+#         """
+#         ROC weights that handle tied priorities.
+
+#         When two criteria share the same priority rank, they occupy the same
+#         positions in the ordering. Their weights are averaged so that tied
+#         criteria are treated equally.
+
+#         Example: priorities = [1, 1, 2]  (first two are tied)
+#           - Positions 1 and 2 are both occupied by the tied pair.
+#           - Each tied criterion gets avg(ROC_weight_1, ROC_weight_2).
+#           - The third criterion gets ROC_weight_3 normally.
+
+#         Args:
+#             priorities: list of integer priority values, one per criterion,
+#                         in the same order as the criteria list.
+#                         Lower number = higher importance.
+#         Returns:
+#             list of floats (weights summing to 1.0), same order as priorities.
+#         """
+#         n = len(priorities)
+#         base_weights = self.calculate_roc_weights(n)  # standard ROC for n slots
+
+#         # Sort unique priorities to assign position slots
+#         sorted_unique = sorted(set(priorities))
+
+#         # Map each unique priority to the slot indices it occupies
+#         # e.g. priority 1 ties → slots 0,1; priority 2 → slot 2
+#         slot_cursor = 0
+#         priority_to_slots = {}
+#         for p in sorted_unique:
+#             count = priorities.count(p)
+#             priority_to_slots[p] = list(range(slot_cursor, slot_cursor + count))
+#             slot_cursor += count
+
+#         # Each priority group gets the average of the base weights at its slots
+#         priority_to_weight = {
+#             p: sum(base_weights[s] for s in slots) / len(slots)
+#             for p, slots in priority_to_slots.items()
+#         }
+
+#         return [priority_to_weight[p] for p in priorities]
+
+#     def _to_float(self, value):
+#         if value is None: return 5.0
+#         if isinstance(value, str):
+#             try:
+#                 return float(value.strip())
+#             except ValueError:
+#                 return float(self.qualitative_map.get(value.lower().strip(), 5.0))
+#         return float(value)
+
+#     def run_topsis(self, options, criteria):
+#         norm_matrix = {}
+#         for crit in criteria:
+#             c_id = crit['id']
+#             sq_sum = sum(opt['values'][c_id] ** 2 for opt in options)
+#             denominator = math.sqrt(sq_sum) if sq_sum > 0 else 1
+#             for opt in options:
+#                 norm_matrix.setdefault(opt['name'], {})
+#                 norm_matrix[opt['name']][c_id] = (opt['values'][c_id] / denominator) * crit['weight']
+
+#         ideal_best, ideal_worst = {}, {}
+#         for crit in criteria:
+#             c_id = crit['id']
+#             vals = [norm_matrix[o['name']][c_id] for o in options]
+#             if crit['type'] == 'benefit':
+#                 ideal_best[c_id], ideal_worst[c_id] = max(vals), min(vals)
+#             else:
+#                 ideal_best[c_id], ideal_worst[c_id] = min(vals), max(vals)
+
+#         results = []
+#         for opt in options:
+#             name = opt['name']
+#             d_best  = math.sqrt(sum((norm_matrix[name][c['id']] - ideal_best[c['id']]) ** 2 for c in criteria))
+#             d_worst = math.sqrt(sum((norm_matrix[name][c['id']] - ideal_worst[c['id']]) ** 2 for c in criteria))
+#             score = d_worst / (d_best + d_worst) if (d_best + d_worst) > 0 else 0.5
+#             results.append({"name": name, "score": score})
+
+#         return sorted(results, key=lambda x: x['score'], reverse=True), ideal_best, ideal_worst, norm_matrix
+
+#     def simulate_decision(self, options, criteria, iterations=1000):
+#         win_counts = {opt['name']: 0 for opt in options}
+
+#         float_options = [
+#             {
+#                 "name": opt['name'],
+#                 "values": {c['id']: self._to_float(opt['values'].get(c['id'])) for c in criteria}
+#             }
+#             for opt in options
+#         ]
+
+#         for _ in range(iterations):
+#             shared_shift = {c['id']: random.gauss(0, 1.2) for c in criteria if c.get('dynamic')}
+#             sim_options = []
+#             for opt in float_options:
+#                 temp_vals = opt['values'].copy()
+#                 for c_id, shift in shared_shift.items():
+#                     temp_vals[c_id] = max(1, min(9, temp_vals[c_id] + shift + random.gauss(0, 0.3)))
+#                 sim_options.append({"name": opt['name'], "values": temp_vals})
+
+#             pass_results, _, _, _ = self.run_topsis(sim_options, criteria)
+#             win_counts[pass_results[0]['name']] += 1
+
+#         return sorted(
+#             [{"name": n, "confidence": round((c / iterations) * 100, 2)} for n, c in win_counts.items()],
+#             key=lambda x: x['confidence'], reverse=True
+#         )
+
+#     def explain_all(self, options, criteria):
+#         results, ideal_best, ideal_worst, norm_matrix = self.run_topsis(options, criteria)
+
+#         ideal_raw = {}
+#         for crit in criteria:
+#             c_id = crit['id']
+#             raw_vals = [opt['values'][c_id] for opt in options]
+#             ideal_raw[c_id] = max(raw_vals) if crit['type'] == 'benefit' else min(raw_vals)
+
+#         all_explanations = {}
+#         for opt in options:
+#             opt_name = opt['name']
+#             opt_norm = norm_matrix[opt_name]
+#             explanation = []
+
+#             for crit in criteria:
+#                 c_id        = crit['id']
+#                 actual      = opt['values'][c_id]
+#                 ib          = ideal_best[c_id]
+#                 iw          = ideal_worst[c_id]
+#                 wv          = opt_norm[c_id]
+#                 ideal_range = abs(ib - iw)
+#                 gap_pct     = abs(wv - ib) / ideal_range * 100 if ideal_range > 0 else 0.0
+
+#                 all_vals = [norm_matrix[o['name']][c_id] for o in options]
+#                 is_best  = (wv == max(all_vals) if crit['type'] == 'benefit' else wv == min(all_vals))
+
+#                 explanation.append({
+#                     "name":      crit['name'],
+#                     "actual":    actual,
+#                     "ideal_raw": ideal_raw[c_id],
+#                     "gap_pct":   round(gap_pct, 1),
+#                     "is_best":   is_best,
+#                     "type":      crit['type'],
+#                     "weight":    crit['weight'],
+#                     "priority":  crit.get('priority', 1),
+#                 })
+
+#             explanation.sort(key=lambda x: x['gap_pct'])
+#             all_explanations[opt_name] = explanation
+
+#         return all_explanations
+
+
+# # ── Input Helpers ─────────────────────────────────────────────────────────────
+
+# def get_input(prompt, type_=str):
+#     while True:
+#         try:
+#             val = input(prompt).strip()
+#             if not val:
+#                 continue
+#             return type_(val)
+#         except ValueError:
+#             print(f"  ⚠  Please enter a valid {type_.__name__}.")
+
+# def get_criterion_type(prompt):
+#     while True:
+#         val = input(prompt).strip()
+#         if val == "1": return "benefit"
+#         if val == "2": return "cost"
+#         print("  ⚠  Please enter 1 or 2.")
+
+
+# # ── Main ──────────────────────────────────────────────────────────────────────
+
+# def interactive_cli():
+#     engine = DecisionEngine()
+#     print("\n" + "=" * 60)
+#     print("  DECISION COMPANION SYSTEM")
+#     print("=" * 60)
+
+#     decision_goal = input("\nWhat decision are you making? ")
+
+#     # 1. Criteria
+#     print("\n" + "-" * 60)
+#     print("  CRITERIA")
+#     print("  Assign a priority number to each criterion.")
+#     print("  Lower number = more important.  Ties are allowed.")
+#     print("  e.g. two criteria both at priority 1 → equal weight.")
+#     print("-" * 60)
+#     num_crit = get_input("\nHow many criteria? ", int)
+#     criteria_list = []
+
+#     for i in range(num_crit):
+#         print(f"\n  Criterion #{i+1}:")
+#         name       = get_input("    Name: ")
+#         c_type     = get_criterion_type("    Type  1=Benefit (↑ better)  2=Cost (↓ better): ")
+#         priority   = get_input("    Priority (1=highest, ties allowed e.g. two criteria both = 1): ", int)
+#         is_dynamic = input("    Dynamic/uncertain? (y/n): ").lower().strip() == 'y'
+#         criteria_list.append({
+#             "id":       f"c{i}",
+#             "name":     name,
+#             "type":     c_type,
+#             "priority": priority,
+#             "dynamic":  is_dynamic
+#         })
+
+#     # Assign weights respecting ties
+#     priorities = [c['priority'] for c in criteria_list]
+#     weights    = engine.calculate_roc_weights_with_ties(priorities)
+#     for c, w in zip(criteria_list, weights):
+#         c['weight'] = w
+
+#     # Display weights — group tied criteria together
+#     print("\n  Weights assigned (tied criteria share equal weight):")
+#     for c in sorted(criteria_list, key=lambda x: x['priority']):
+#         tie_note = ""
+#         if priorities.count(c['priority']) > 1:
+#             tie_note = "  (tied)"
+#         tag = "  🔄 dynamic" if c['dynamic'] else ""
+#         print(f"    Priority {c['priority']}  {c['name']:<24} {c['weight']*100:.2f}%{tie_note}{tag}")
+
+#     total = sum(c['weight'] for c in criteria_list)
+#     print(f"    {'Total':<30} {total*100:.2f}%")
+
+#     # 2. Options
+#     print("\n" + "-" * 60)
+#     print("  OPTIONS")
+#     print("  Use numbers (1-9) or: Very Low / Low / Medium / High / Very High")
+#     print("-" * 60)
+#     num_opts = get_input("\nHow many options? ", int)
+#     options_list = []
+
+#     # Sort criteria by priority for consistent display
+#     display_order = sorted(criteria_list, key=lambda x: x['priority'])
+
+#     for j in range(num_opts):
+#         opt_name   = get_input(f"\n  Option {j+1} name: ")
+#         opt_values = {}
+#         for c in display_order:
+#             val = get_input(f"    {c['name']}: ")
+#             opt_values[c['id']] = val
+#         options_list.append({"name": opt_name, "values": opt_values})
+
+#     # Convert to floats, deepcopy before simulation
+#     for opt in options_list:
+#         opt['values'] = {c['id']: engine._to_float(opt['values'].get(c['id'])) for c in criteria_list}
+#     original_options = copy.deepcopy(options_list)
+
+#     # 3. Simulate
+#     print(f"\n  Simulating 1,000 futures for: {decision_goal}...")
+#     results = engine.simulate_decision(options_list, criteria_list)
+
+#     # 4. Results
+#     print("\n" + "=" * 60)
+#     print("  SIMULATION RESULTS")
+#     print("=" * 60)
+#     for r in results:
+#         bar  = "█" * int(r['confidence'] / 2)
+#         star = "🏆" if r == results[0] else "  "
+#         print(f"  {star} {r['name']:<20} {r['confidence']:>6.2f}%  {bar}")
+
+#     # 5. Why it won + full breakdown
+#     winner           = results[0]['name']
+#     all_explanations = engine.explain_all(original_options, criteria_list)
+#     winner_expl      = all_explanations[winner]
+
+#     best = min(winner_expl, key=lambda e: (e['gap_pct'], -e['weight']))
+
+#     print("\n" + "=" * 60)
+#     print(f"  WHY '{winner}' WON")
+#     print("=" * 60)
+#     print(f"\n  '{winner}' is selected due to its {best['name']} "
+#           f"(value={best['actual']:.1f}) being closest to the ideal "
+#           f"(ideal={best['ideal_raw']:.1f}, gap={best['gap_pct']:.1f}%).")
+
+#     # 6. Full breakdown
+#     print("\n" + "=" * 60)
+#     print("  OPTION BREAKDOWN")
+#     print("=" * 60)
+
+#     for opt in original_options:
+#         opt_name   = opt['name']
+#         expl       = all_explanations[opt_name]
+#         strengths  = [e for e in expl if e['gap_pct'] <= 40]
+#         weaknesses = [e for e in expl if e['gap_pct'] >  40]
+#         rank       = next(i+1 for i, r in enumerate(results) if r['name'] == opt_name)
+#         confidence = next(r['confidence'] for r in results if r['name'] == opt_name)
+#         marker     = "🏆" if rank == 1 else f"#{rank}"
+
+#         print(f"\n  {marker} {opt_name}  ({confidence:.1f}% confidence)")
+#         print(f"  {'─' * 40}")
+
+#         if strengths:
+#             print("    Strengths:")
+#             for e in strengths:
+#                 print(f"      ✅ {e['name']:<20} value={e['actual']:.1f}  "
+#                       f"ideal={e['ideal_raw']:.1f}  gap={e['gap_pct']:.1f}%")
+
+#         if weaknesses:
+#             print("    Weaknesses:")
+#             for e in weaknesses:
+#                 print(f"      ❌ {e['name']:<20} value={e['actual']:.1f}  "
+#                       f"ideal={e['ideal_raw']:.1f}  gap={e['gap_pct']:.1f}%")
+
+#     print("\n" + "=" * 60)
+
+
+# if __name__ == "__main__":
+#     try:
+#         interactive_cli()
+#     except KeyboardInterrupt:
+#         print("\n\n  Cancelled.\n")
+
+# cleared reasoning bug
 import math
 import random
 import copy
@@ -1000,22 +1334,11 @@ class DecisionEngine:
           - Positions 1 and 2 are both occupied by the tied pair.
           - Each tied criterion gets avg(ROC_weight_1, ROC_weight_2).
           - The third criterion gets ROC_weight_3 normally.
-
-        Args:
-            priorities: list of integer priority values, one per criterion,
-                        in the same order as the criteria list.
-                        Lower number = higher importance.
-        Returns:
-            list of floats (weights summing to 1.0), same order as priorities.
         """
         n = len(priorities)
-        base_weights = self.calculate_roc_weights(n)  # standard ROC for n slots
+        base_weights = self.calculate_roc_weights(n)
 
-        # Sort unique priorities to assign position slots
         sorted_unique = sorted(set(priorities))
-
-        # Map each unique priority to the slot indices it occupies
-        # e.g. priority 1 ties → slots 0,1; priority 2 → slot 2
         slot_cursor = 0
         priority_to_slots = {}
         for p in sorted_unique:
@@ -1023,7 +1346,6 @@ class DecisionEngine:
             priority_to_slots[p] = list(range(slot_cursor, slot_cursor + count))
             slot_cursor += count
 
-        # Each priority group gets the average of the base weights at its slots
         priority_to_weight = {
             p: sum(base_weights[s] for s in slots) / len(slots)
             for p, slots in priority_to_slots.items()
@@ -1101,10 +1423,16 @@ class DecisionEngine:
         results, ideal_best, ideal_worst, norm_matrix = self.run_topsis(options, criteria)
 
         ideal_raw = {}
+        worst_raw = {}
         for crit in criteria:
             c_id = crit['id']
             raw_vals = [opt['values'][c_id] for opt in options]
-            ideal_raw[c_id] = max(raw_vals) if crit['type'] == 'benefit' else min(raw_vals)
+            if crit['type'] == 'benefit':
+                ideal_raw[c_id] = max(raw_vals)
+                worst_raw[c_id] = min(raw_vals)
+            else:
+                ideal_raw[c_id] = min(raw_vals)
+                worst_raw[c_id] = max(raw_vals)
 
         all_explanations = {}
         for opt in options:
@@ -1115,16 +1443,17 @@ class DecisionEngine:
             for crit in criteria:
                 c_id        = crit['id']
                 actual      = opt['values'][c_id]
-                ib          = ideal_best[c_id]
-                iw          = ideal_worst[c_id]
+                ideal_val   = ideal_raw[c_id]
+                worst_val   = worst_raw[c_id]
                 wv          = opt_norm[c_id]
-                ideal_range = abs(ib - iw)
-                gap_pct     = abs(wv - ib) / ideal_range * 100 if ideal_range > 0 else 0.0
+                raw_range   = abs(ideal_val - worst_val)
+                gap_pct     = abs(actual - ideal_val) / raw_range * 100 if raw_range > 0 else 0.0
 
                 all_vals = [norm_matrix[o['name']][c_id] for o in options]
                 is_best  = (wv == max(all_vals) if crit['type'] == 'benefit' else wv == min(all_vals))
 
                 explanation.append({
+                    "id":        c_id,        # needed for raw value lookup
                     "name":      crit['name'],
                     "actual":    actual,
                     "ideal_raw": ideal_raw[c_id],
@@ -1141,6 +1470,38 @@ class DecisionEngine:
         return all_explanations
 
 
+# ── Reasoning Helper ──────────────────────────────────────────────────────────
+
+def find_differentiating_crit(opt_name, opt_expl, all_explanations, all_options):
+    """
+    Find the criterion that best explains WHY this option stands out.
+
+    Step 1: find criteria where this option has a strictly lower gap_pct
+            than ALL other options (it is genuinely better on that criterion).
+            Among those, pick the highest-weight one.
+    Step 2: if no unique differentiator exists, fall back to
+            lowest gap_pct / highest weight.
+    """
+    other_names = [o['name'] for o in all_options if o['name'] != opt_name]
+
+    differentiating = []
+    for e in opt_expl:
+        cid       = e['id']
+        this_gap  = e['gap_pct']
+        others_gaps = [
+            next(x['gap_pct'] for x in all_explanations[n] if x['id'] == cid)
+            for n in other_names
+        ]
+        if all(this_gap < og for og in others_gaps):
+            differentiating.append(e)
+
+    if differentiating:
+        return max(differentiating, key=lambda e: e['weight'])
+
+    # Fallback: lowest gap then highest weight
+    return min(opt_expl, key=lambda e: (e['gap_pct'], -e['weight']))
+
+
 # ── Input Helpers ─────────────────────────────────────────────────────────────
 
 def get_input(prompt, type_=str):
@@ -1151,14 +1512,14 @@ def get_input(prompt, type_=str):
                 continue
             return type_(val)
         except ValueError:
-            print(f"  ⚠  Please enter a valid {type_.__name__}.")
+            print(f"  Please enter a valid {type_.__name__}.")
 
 def get_criterion_type(prompt):
     while True:
         val = input(prompt).strip()
         if val == "1": return "benefit"
         if val == "2": return "cost"
-        print("  ⚠  Please enter 1 or 2.")
+        print("  Please enter 1 or 2.")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -1176,7 +1537,7 @@ def interactive_cli():
     print("  CRITERIA")
     print("  Assign a priority number to each criterion.")
     print("  Lower number = more important.  Ties are allowed.")
-    print("  e.g. two criteria both at priority 1 → equal weight.")
+    print("  e.g. two criteria both at priority 1 = equal weight.")
     print("-" * 60)
     num_crit = get_input("\nHow many criteria? ", int)
     criteria_list = []
@@ -1184,8 +1545,8 @@ def interactive_cli():
     for i in range(num_crit):
         print(f"\n  Criterion #{i+1}:")
         name       = get_input("    Name: ")
-        c_type     = get_criterion_type("    Type  1=Benefit (↑ better)  2=Cost (↓ better): ")
-        priority   = get_input("    Priority (1=highest, ties allowed e.g. two criteria both = 1): ", int)
+        c_type     = get_criterion_type("    Type  1=Benefit (higher is better)  2=Cost (lower is better): ")
+        priority   = get_input("    Priority (1=highest, ties allowed): ", int)
         is_dynamic = input("    Dynamic/uncertain? (y/n): ").lower().strip() == 'y'
         criteria_list.append({
             "id":       f"c{i}",
@@ -1201,44 +1562,44 @@ def interactive_cli():
     for c, w in zip(criteria_list, weights):
         c['weight'] = w
 
-    # Display weights — group tied criteria together
+    # Display weights
     print("\n  Weights assigned (tied criteria share equal weight):")
     for c in sorted(criteria_list, key=lambda x: x['priority']):
-        tie_note = ""
-        if priorities.count(c['priority']) > 1:
-            tie_note = "  (tied)"
-        tag = "  🔄 dynamic" if c['dynamic'] else ""
-        print(f"    Priority {c['priority']}  {c['name']:<24} {c['weight']*100:.2f}%{tie_note}{tag}")
+        tie_note = "  (tied)" if priorities.count(c['priority']) > 1 else ""
+        dyn_note = "  [dynamic]" if c['dynamic'] else ""
+        print(f"    Priority {c['priority']}  {c['name']:<24} {c['weight']*100:.2f}%{tie_note}{dyn_note}")
+    print(f"    {'Total':<30} {sum(c['weight'] for c in criteria_list)*100:.2f}%")
 
-    total = sum(c['weight'] for c in criteria_list)
-    print(f"    {'Total':<30} {total*100:.2f}%")
-
-    # 2. Options
+    # 2. Options — capture raw string values before converting to float
     print("\n" + "-" * 60)
     print("  OPTIONS")
     print("  Use numbers (1-9) or: Very Low / Low / Medium / High / Very High")
     print("-" * 60)
     num_opts = get_input("\nHow many options? ", int)
-    options_list = []
 
-    # Sort criteria by priority for consistent display
-    display_order = sorted(criteria_list, key=lambda x: x['priority'])
+    display_order  = sorted(criteria_list, key=lambda x: x['priority'])
+    options_list   = []
+    raw_values_map = {}   # {option_name: {c_id: original_string}}
 
     for j in range(num_opts):
-        opt_name   = get_input(f"\n  Option {j+1} name: ")
-        opt_values = {}
+        opt_name  = get_input(f"\n  Option {j+1} name: ")
+        opt_vals  = {}
+        raw_vals  = {}
         for c in display_order:
-            val = get_input(f"    {c['name']}: ")
-            opt_values[c['id']] = val
-        options_list.append({"name": opt_name, "values": opt_values})
+            val            = get_input(f"    {c['name']}: ")
+            opt_vals[c['id']] = val          # keep raw string for now
+            raw_vals[c['id']] = val.strip()  # store for reasoning
+        options_list.append({"name": opt_name, "values": opt_vals})
+        raw_values_map[opt_name] = raw_vals
 
     # Convert to floats, deepcopy before simulation
     for opt in options_list:
-        opt['values'] = {c['id']: engine._to_float(opt['values'].get(c['id'])) for c in criteria_list}
+        opt['values'] = {c['id']: engine._to_float(opt['values'].get(c['id']))
+                         for c in criteria_list}
     original_options = copy.deepcopy(options_list)
 
     # 3. Simulate
-    print(f"\n  Simulating 1,000 futures for: {decision_goal}...")
+    print(f"\n  Running 1,000 simulations for: {decision_goal} ...")
     results = engine.simulate_decision(options_list, criteria_list)
 
     # 4. Results
@@ -1246,23 +1607,25 @@ def interactive_cli():
     print("  SIMULATION RESULTS")
     print("=" * 60)
     for r in results:
-        bar  = "█" * int(r['confidence'] / 2)
-        star = "🏆" if r == results[0] else "  "
-        print(f"  {star} {r['name']:<20} {r['confidence']:>6.2f}%  {bar}")
+        bar  = "#" * int(r['confidence'] / 2)
+        star = "[WINNER]" if r == results[0] else "        "
+        print(f"  {star}  {r['name']:<20} {r['confidence']:>6.2f}%  {bar}")
 
-    # 5. Why it won + full breakdown
-    winner           = results[0]['name']
+    # 5. Explanations
     all_explanations = engine.explain_all(original_options, criteria_list)
+    winner           = results[0]['name']
     winner_expl      = all_explanations[winner]
 
-    best = min(winner_expl, key=lambda e: (e['gap_pct'], -e['weight']))
+    # Find differentiating criterion for the winner
+    best = find_differentiating_crit(winner, winner_expl, all_explanations, original_options)
+    raw_val = raw_values_map[winner][best['id']]
 
     print("\n" + "=" * 60)
     print(f"  WHY '{winner}' WON")
     print("=" * 60)
-    print(f"\n  '{winner}' is selected due to its {best['name']} "
-          f"(value={best['actual']:.1f}) being closest to the ideal "
-          f"(ideal={best['ideal_raw']:.1f}, gap={best['gap_pct']:.1f}%).")
+    print(f"\n  '{winner}' is selected due to its {best['name']} of {raw_val}.")
+    print(f"  (numeric value={best['actual']:.1f}, "
+          f"ideal={best['ideal_raw']:.1f}, gap={best['gap_pct']:.1f}%)")
 
     # 6. Full breakdown
     print("\n" + "=" * 60)
@@ -1276,21 +1639,26 @@ def interactive_cli():
         weaknesses = [e for e in expl if e['gap_pct'] >  40]
         rank       = next(i+1 for i, r in enumerate(results) if r['name'] == opt_name)
         confidence = next(r['confidence'] for r in results if r['name'] == opt_name)
-        marker     = "🏆" if rank == 1 else f"#{rank}"
+        marker     = "[#1]" if rank == 1 else f"[#{rank}]"
+
+        # Per-option differentiating criterion
+        opt_best    = find_differentiating_crit(opt_name, expl, all_explanations, original_options)
+        opt_raw_val = raw_values_map[opt_name][opt_best['id']]
 
         print(f"\n  {marker} {opt_name}  ({confidence:.1f}% confidence)")
+        print(f"  Notable for: {opt_best['name']} of {opt_raw_val}")
         print(f"  {'─' * 40}")
 
         if strengths:
             print("    Strengths:")
             for e in strengths:
-                print(f"      ✅ {e['name']:<20} value={e['actual']:.1f}  "
+                print(f"      [+] {e['name']:<20} value={e['actual']:.1f}  "
                       f"ideal={e['ideal_raw']:.1f}  gap={e['gap_pct']:.1f}%")
 
         if weaknesses:
             print("    Weaknesses:")
             for e in weaknesses:
-                print(f"      ❌ {e['name']:<20} value={e['actual']:.1f}  "
+                print(f"      [-] {e['name']:<20} value={e['actual']:.1f}  "
                       f"ideal={e['ideal_raw']:.1f}  gap={e['gap_pct']:.1f}%")
 
     print("\n" + "=" * 60)
