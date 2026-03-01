@@ -348,6 +348,7 @@ https://deccampanionhost.vercel.app/
 ```
 git clone https://github.com/ATHULYAL/decision_companion
 ```
+cd source code
 
 ---
 
